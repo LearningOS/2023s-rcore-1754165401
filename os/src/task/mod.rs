@@ -66,7 +66,7 @@ lazy_static! {
             let task = TaskControlBlock{
                 task_cx : TaskContext::zero_init(),
                 task_status : TaskStatus::UnInit,
-                init_time : 0,
+                time : 0,
                 syscall_times:BTreeMap::new(),
             };
             tasks.push(task)
@@ -96,7 +96,7 @@ impl TaskManager {
         let mut inner = self.inner.exclusive_access();
         let task0 = &mut inner.tasks[0];
         task0.task_status = TaskStatus::Running;
-        task0.init_time = get_time_ms();
+        task0.time = get_time_ms();
         let next_task_cx_ptr = &task0.task_cx as *const TaskContext;
         drop(inner);
         let mut _unused = TaskContext::zero_init();
@@ -140,8 +140,8 @@ impl TaskManager {
             let mut inner = self.inner.exclusive_access();
             let current = inner.current_task;
             inner.tasks[next].task_status = TaskStatus::Running;
-            if inner.tasks[next].init_time == 0 {
-                inner.tasks[next].init_time = get_time_ms();
+            if inner.tasks[next].time == 0 {
+                inner.tasks[next].time = get_time_ms();
             }
             inner.current_task = next;
             // if inner.tasks[next].running_time == 0 {
@@ -172,7 +172,7 @@ impl TaskManager {
             syscall_times[i] = times;
         }
 
-        let time = get_time_ms() - current_task.init_time;
+        let time = get_time_ms() - current_task.time;
         let temp_ti = TaskInfo{
             status,
             syscall_times,

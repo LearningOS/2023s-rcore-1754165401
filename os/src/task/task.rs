@@ -11,7 +11,7 @@ pub struct TaskControlBlock {
     /// The task context
     pub task_cx: TaskContext,
     /// The first time task started
-    pub init_time:usize,
+    pub time:usize,
     /// Record while syscall was occured
     pub syscall_times:BTreeMap<usize,u32>,
 }

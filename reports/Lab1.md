@@ -8,7 +8,7 @@
 #### 思路
 读完源代码之后，发现主要是需要自己实现获取系统调用以及次数和任务总运行时长
 想到在TaskControlBlock这个结构体当中添加相关的两个字段，分别为
-- `init_time` :记录时间
+- `time` :记录时间
 - `syscall_times`:记录次数
 
 然后在os/src/task/mod.rs中实现get_task_info与increase_syscall_time方法，并对任务调度进行相应的时间更新，然后就可以了
