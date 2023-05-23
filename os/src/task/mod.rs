@@ -66,7 +66,7 @@ lazy_static! {
                 task_cx : TaskContext::zero_init(),
                 task_status : TaskStatus::UnInit,
                 running_time : 0,
-                syscall_times:[0;MAX_SYSCALL_NUM]
+                syscall_times:[0;MAX_SYSCALL_NUM],
             };
             tasks.push(task)
         }
