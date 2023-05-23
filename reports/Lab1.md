@@ -11,7 +11,7 @@
 - `time` :记录时间
 - `syscall_times`:记录次数
 
-然后在os/src/task/mod.rs中在呢国家current_task_control_block与update_task_syscall_info方法，并对任务调度进行相应的时间更新，然后就可以了
+然后在os/src/task/mod.rs中实现get_task_info与increase_syscall_time方法，并对任务调度进行相应的时间更新，然后就可以了
 
 
 

@@ -14,12 +14,13 @@ mod switch;
 #[allow(clippy::module_inception)]
 mod task;
 
-use crate::config::{MAX_APP_NUM,MAX_SYSCALL_NUM};
+use crate::config::MAX_SYSCALL_NUM;
 use crate::loader::{get_num_app, init_app_cx};
 use crate::sync::UPSafeCell;
-
-use crate::timer::get_time_us;
+use crate::syscall::TaskInfo;
+use crate::timer::get_time_ms;
 use alloc::vec::Vec;
+use alloc::collections::btree_map::BTreeMap;
 use lazy_static::*;
 use switch::__switch;
 pub use task::{TaskControlBlock, TaskStatus};
@@ -59,14 +60,14 @@ lazy_static! {
         //     task_cx: TaskContext::zero_init(),
         //     task_status: TaskStatus::UnInit,
         // }; MAX_APP_NUM];
-        let mut tasks:Vec<TaskControlBlock> = Vec::new();
+        let mut tasks = Vec::new();
         
-        for _ in 0..MAX_APP_NUM {
+        for _ in 0..num_app{
             let task = TaskControlBlock{
                 task_cx : TaskContext::zero_init(),
                 task_status : TaskStatus::UnInit,
-                running_time : 0,
-                syscall_times:[0;MAX_SYSCALL_NUM],
+                init_time : 0,
+                syscall_times:BTreeMap::new(),
             };
             tasks.push(task)
         }
@@ -95,7 +96,7 @@ impl TaskManager {
         let mut inner = self.inner.exclusive_access();
         let task0 = &mut inner.tasks[0];
         task0.task_status = TaskStatus::Running;
-        task0.running_time = get_time_us();
+        task0.init_time = get_time_ms();
         let next_task_cx_ptr = &task0.task_cx as *const TaskContext;
         drop(inner);
         let mut _unused = TaskContext::zero_init();
@@ -119,8 +120,6 @@ impl TaskManager {
         let current = inner.current_task;
         inner.tasks[current].task_status = TaskStatus::Exited;
 
-        inner.tasks[current].running_time = get_time_us() - inner.tasks[current].running_time;
-
     }
 
     /// Find next task to run and return task id.
@@ -141,11 +140,13 @@ impl TaskManager {
             let mut inner = self.inner.exclusive_access();
             let current = inner.current_task;
             inner.tasks[next].task_status = TaskStatus::Running;
-            inner.current_task = next;
-
-            if inner.tasks[next].running_time == 0 {
-                inner.tasks[next].running_time = get_time_us();
+            if inner.tasks[next].init_time == 0 {
+                inner.tasks[next].init_time = get_time_ms();
             }
+            inner.current_task = next;
+            // if inner.tasks[next].running_time == 0 {
+            //     inner.tasks[next].running_time = get_time_us();
+            // }
 
             let current_task_cx_ptr = &mut inner.tasks[current].task_cx as *mut TaskContext;
             let next_task_cx_ptr = &inner.tasks[next].task_cx as *const TaskContext;
@@ -161,20 +162,35 @@ impl TaskManager {
     }
 
     //获取当前CPU上正在运行的task的信息
-    fn find_task_info(&self) -> TaskControlBlock {
+    fn get_task_info(&self,ti:*mut TaskInfo) -> isize {
         let inner  = self.inner.exclusive_access();
         let current = inner.current_task;
-        let task = inner.tasks.get(current).unwrap();
-        task.clone()
+        let current_task = inner.tasks[current].clone();
+        let status = TaskStatus::Running;
+        let mut syscall_times = [0;MAX_SYSCALL_NUM];
+        for (i,times) in current_task.syscall_times{
+            syscall_times[i] = times;
+        }
+
+        let time = get_time_ms() - current_task.init_time;
+        let temp_ti = TaskInfo{
+            status,
+            syscall_times,
+            time,
+        };
+        unsafe{
+            * ti = temp_ti;
+        };
+        0
     }
 
-    //当task陷入内核时,如果是syscall,则可以通过此方法更新syscall调用信息
-    fn update_task_syscall_info(&self,syscall:usize) {
+    fn increase_syscall_time(&self,syscall_id:usize) {
         let mut inner = self.inner.exclusive_access();
         let current = inner.current_task;
-        inner.tasks[current].syscall_times[syscall] += 1;
+        let current_task = &mut inner.tasks[current];
+        let st = current_task.syscall_times.entry(syscall_id).or_insert_with(||{0});
+        * st += 1;
     }
-
 }
 
 /// Run the first task in task list.
@@ -210,12 +226,12 @@ pub fn exit_current_and_run_next() {
     run_next_task();
 }
 
-///获取当前task的信息
-pub fn current_task_control_block() -> TaskControlBlock {
-    TASK_MANAGER.find_task_info()
+///通过传地址返回任务信息
+pub fn get_task_info(_ti:*mut TaskInfo) -> isize{
+    TASK_MANAGER.get_task_info(_ti)
 }
 
-///更新syscall info
-pub fn update_task_syscall_info(syscall:usize){
-    TASK_MANAGER.update_task_syscall_info(syscall);
+///当被syscall时增加syscall次数
+pub fn increase_syscall_time(syscall_id:usize){
+    TASK_MANAGER.increase_syscall_time(syscall_id);
 }
