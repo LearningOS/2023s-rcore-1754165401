@@ -6,6 +6,8 @@ use crate::mm::{
 };
 use crate::trap::{trap_handler, TrapContext};
 
+use alloc::collections::btree_map::BTreeMap;
+
 /// The task control block (TCB) of a task.
 pub struct TaskControlBlock {
     /// Save task context
@@ -28,6 +30,12 @@ pub struct TaskControlBlock {
 
     /// Program break
     pub program_brk: usize,
+    
+    /// first run time
+    pub fr_time:usize,
+
+    ///syscall count
+    pub syscall_times:BTreeMap<usize,u32>,
 }
 
 impl TaskControlBlock {
@@ -63,6 +71,8 @@ impl TaskControlBlock {
             base_size: user_sp,
             heap_bottom: user_sp,
             program_brk: user_sp,
+            fr_time:0,
+            syscall_times:BTreeMap::new(),
         };
         // prepare TrapContext in user space
         let trap_cx = task_control_block.get_trap_cx();

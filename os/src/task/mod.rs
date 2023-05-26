@@ -17,12 +17,15 @@ mod task;
 use crate::loader::{get_app_data, get_num_app};
 use crate::sync::UPSafeCell;
 use crate::trap::TrapContext;
+use crate::timer::{get_time_us,get_time_ms};
 use alloc::vec::Vec;
 use lazy_static::*;
 use switch::__switch;
 pub use task::{TaskControlBlock, TaskStatus};
+use crate::config::MAX_SYSCALL_NUM;
 
 pub use context::TaskContext;
+use crate::syscall::TaskInfo;
 
 /// The task manager, where all the tasks are managed.
 ///
@@ -140,6 +143,9 @@ impl TaskManager {
             let mut inner = self.inner.exclusive_access();
             let current = inner.current_task;
             inner.tasks[next].task_status = TaskStatus::Running;
+            if inner.tasks[next].fr_time == 0{
+                inner.tasks[next].fr_time = get_time_ms();
+            }
             inner.current_task = next;
             let current_task_cx_ptr = &mut inner.tasks[current].task_cx as *mut TaskContext;
             let next_task_cx_ptr = &inner.tasks[next].task_cx as *const TaskContext;
@@ -153,7 +159,53 @@ impl TaskManager {
             panic!("All applications completed!");
         }
     }
+
+    fn get_current_task_info(&self,pa:usize) -> isize{
+        let inner = self.inner.exclusive_access();
+        let current = inner.current_task;
+        let status = TaskStatus::Running;
+        let mut syscall_times = [0;MAX_SYSCALL_NUM];
+        let current_syscall_times = inner.tasks[current].syscall_times.clone();
+        for (i,times) in current_syscall_times {
+            syscall_times[i] = times;
+        }
+        
+        let time = get_time_us() / 1000 - inner.tasks[current].fr_time;
+        let temp_ti = TaskInfo{
+            status,
+            syscall_times,
+            time,
+        };
+        unsafe { 
+            * (pa as *mut TaskInfo) = temp_ti;
+        };
+        0
+    }
+
+    ///increase syscall times
+    fn increase_syscall(&self,syscall_id:usize){
+        let mut inner = self.inner.exclusive_access();
+        let current = inner.current_task;
+        let current_task = &mut inner.tasks[current];
+        let st = current_task.syscall_times.entry(syscall_id).or_insert_with(||{0});
+        *st += 1;
+    }
+
+    ///map current addr to new frame
+    fn current_mmap(&self,start:usize,len:usize,port:usize) -> isize {
+        let mut inner = self.inner.exclusive_access();
+        let current_task = inner.current_task;
+        inner.tasks[current_task].memory_set.mmap(start,len,port)
+    }
+
+    ///cance map
+    fn current_munmap(&self,start:usize,len:usize) -> isize {
+        let mut inner = self.inner.exclusive_access();
+        let current_task = inner.current_task;
+        inner.tasks[current_task].memory_set.munmap(start,len)
+    }
 }
+
 
 /// Run the first task in task list.
 pub fn run_first_task() {
@@ -201,4 +253,24 @@ pub fn current_trap_cx() -> &'static mut TrapContext {
 /// Change the current 'Running' task's program break
 pub fn change_program_brk(size: i32) -> Option<usize> {
     TASK_MANAGER.change_current_program_brk(size)
+}
+
+///Get current task info
+pub fn current_task_info(pa:usize) -> isize {
+    TASK_MANAGER.get_current_task_info(pa)
+}
+
+///Add syscall_call time
+pub fn increase_current_syscall(syscall_id:usize){
+    TASK_MANAGER.increase_syscall(syscall_id);
+}
+
+///map current addr to new PhysAddr
+pub fn current_mmap(start:usize,len:usize,port:usize) -> isize{
+    TASK_MANAGER.current_mmap(start,len,port)
+}
+
+///cance map,free corresponding PhysAddr
+pub fn current_munmap(start:usize,len:usize) -> isize{
+    TASK_MANAGER.current_munmap(start,len)
 }
