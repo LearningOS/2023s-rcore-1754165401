@@ -72,6 +72,11 @@ impl MemorySet {
             self.areas.remove(idx);
         }
     }
+
+    ///check have vr
+    pub fn includes(&self,vr:VPNRange) -> bool{
+        self.areas.iter().any(|area| area.includes(vr))
+    }
     /// Add a new MapArea into this MemorySet.
     /// Assuming that there are no conflicts in the virtual address
     /// space.
@@ -253,6 +258,39 @@ impl MemorySet {
         }
         memory_set
     }
+
+    ///map addr to frame
+    pub fn mmap(&mut self,start:usize,len:usize,port:usize) -> isize {
+        let perm = MapPermission::from_bits(((port << 1) + 16) as u8).unwrap();
+        let start = VirtAddr(start);
+        let end = VirtAddr(start.0 + len);
+        let vr = VPNRange::new(start.floor(),end.ceil());
+        if self.includes(vr){
+            return -1;
+        }
+        self.push(MapArea::new(start,end,MapType::Framed,perm),None);
+        0
+    }
+
+    ///cance map
+    pub fn munmap(&mut self,start:usize,len:usize) -> isize{
+        let start = VirtAddr(start);
+        let end = VirtAddr(start.0 + len);
+        if !start.aligned(){
+            return -1;
+        }
+        let vr = VPNRange::new(start.floor(),end.ceil());
+        let pos = self.areas.iter().position(|area| area.vpn_range.get_start() == vr.get_start() && area.vpn_range.get_end() == vr.get_end());
+
+        match pos {
+            Some(idx) => {
+                self.areas[idx].unmap(&mut self.page_table);
+                self.areas.remove(idx);
+                0
+            }
+            None => -1,
+        }
+    }
     /// Change page table by writing satp CSR Register.
     pub fn activate(&self) {
         let satp = self.page_table.token();
@@ -348,6 +386,11 @@ impl MapArea {
         let pte_flags = PTEFlags::from_bits(self.map_perm.bits).unwrap();
         page_table.map(vpn, ppn, pte_flags);
     }
+
+    pub fn includes(&self,vr:VPNRange) -> bool{
+        self.vpn_range.includes(vr)
+    }
+
     pub fn unmap_one(&mut self, page_table: &mut PageTable, vpn: VirtPageNum) {
         if self.map_type == MapType::Framed {
             self.data_frames.remove(&vpn);

@@ -109,3 +109,18 @@ pub fn schedule(switched_task_cx_ptr: *mut TaskContext) {
         __switch(switched_task_cx_ptr, idle_task_cx_ptr);
     }
 }
+
+
+///for syscall mmap
+pub fn current_mmap(start:usize,len:usize,port:usize) -> isize {
+    let current_task = PROCESSOR.exclusive_access().current().unwrap();
+    let mut current_task_inner = current_task.inner_exclusive_access();
+    current_task_inner.memory_set.mmap(start,len,port)
+}
+
+///for syscall munmap
+pub fn current_munmap(start:usize,len:usize) -> isize {
+    let current_task = PROCESSOR.exclusive_access().current().unwrap();
+    let mut current_task_inner = current_task.inner_exclusive_access();
+    current_task_inner.memory_set.munmap(start,len)
+}

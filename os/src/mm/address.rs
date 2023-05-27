@@ -195,7 +195,7 @@ impl PhysPageNum {
 
 /// iterator for phy/virt page number
 pub trait StepByOne {
-    /// step by one element(page number)
+    /// step by one element(page number)    
     fn step(&mut self);
 }
 impl StepByOne for VirtPageNum {
@@ -226,6 +226,9 @@ where
     }
     pub fn get_end(&self) -> T {
         self.r
+    }
+    pub fn includes(&self,vr:Self) -> bool {
+        ((self.l <= vr.l) && (vr.l < self.r)) || ((self.l < vr.r) && (vr.r <= self.r)) || (self.l >= vr.l) && (self.r <= vr.r)
     }
 }
 impl<T> IntoIterator for SimpleRange<T>
