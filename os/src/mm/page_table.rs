@@ -219,6 +219,14 @@ pub fn translated_refmut<T>(token: usize, ptr: *mut T) -> &'static mut T {
         .get_mut()
 }
 
+///get ppn
+pub fn tran_vir_to_phy(usr_token:usize,vaddr:VirtAddr) -> PhysPageNum {
+    let page_table = PageTable::from_token(usr_token);
+    let vpn = vaddr.floor();
+    let ppn = page_table.translate(vpn).unwrap().ppn();
+
+    ppn
+}
 /// An abstraction over a buffer passed from user space to kernel space
 pub struct UserBuffer {
     /// A list of buffers

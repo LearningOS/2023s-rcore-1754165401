@@ -7,6 +7,7 @@ use lazy_static::*;
 ///A array of `TaskControlBlock` that is thread-safe
 pub struct TaskManager {
     ready_queue: VecDeque<Arc<TaskControlBlock>>,
+    big_stride: isize,
 }
 
 /// A simple FIFO scheduler.
@@ -14,6 +15,7 @@ impl TaskManager {
     ///Creat an empty TaskManager
     pub fn new() -> Self {
         Self {
+            big_stride: 255,
             ready_queue: VecDeque::new(),
         }
     }
@@ -23,7 +25,19 @@ impl TaskManager {
     }
     /// Take a process out of the ready queue
     pub fn fetch(&mut self) -> Option<Arc<TaskControlBlock>> {
-        self.ready_queue.pop_front()
+        let mut min = 10000;
+        let mut index:usize = 0;
+        
+        for i in 0..self.ready_queue.len() {
+            if min > self.ready_queue[i].get_stride() {
+                min = self.ready_queue[i].get_stride();
+                index = i;
+            }
+        }
+        let priority = self.ready_queue[index].get_priority();
+        self.ready_queue[index].inner_exclusive_access().stride += self.big_stride / priority;
+        self.ready_queue.remove(index)
+        // self.ready_queue.pop_front()
     }
 }
 

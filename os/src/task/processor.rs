@@ -109,3 +109,11 @@ pub fn schedule(switched_task_cx_ptr: *mut TaskContext) {
         __switch(switched_task_cx_ptr, idle_task_cx_ptr);
     }
 }
+
+///increase syscall time
+pub fn add_syscall_times(syscall_id:usize) {
+    let task = current_task().unwrap();
+    let mut inner = task.inner_exclusive_access();
+    let syscall_times = inner.get_tcb_syscall_times();
+    syscall_times[syscall_id] += 1;
+}
